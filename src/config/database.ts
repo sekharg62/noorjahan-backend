@@ -3,7 +3,12 @@ import { Pool } from "pg";
 import { PrismaClient } from "../../generated/prisma/client";
 import { env } from "./env";
 
-const pool = new Pool({ connectionString: env.databaseUrl });
+const pool = new Pool({
+  connectionString: env.databaseUrl,
+  max: process.env.VERCEL ? 1 : 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 const adapter = new PrismaPg(pool);
 
 const globalForPrisma = globalThis as unknown as {
@@ -20,8 +25,6 @@ export const prisma =
         : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.prisma = prisma;
 
 export { pool };
