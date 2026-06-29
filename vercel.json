@@ -1,5 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "prisma generate",
+  "buildCommand": "prisma generate && tsc",
+  "installCommand": "npm install",
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }]
 }
