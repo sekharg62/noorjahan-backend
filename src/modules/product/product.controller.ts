@@ -1,9 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/adminAuth";
-import { createProduct, getAllProducts, getProductsByCategory } from "./product.service";
+import { createProduct, getAllProducts, getProductBySlug, getProductsByCategory } from "./product.service";
 
 function getQueryParam(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function getSlugParam(req: Request): string {
+  const { slug } = req.params;
+  return Array.isArray(slug) ? slug[0] : slug;
 }
 
 export async function getAll(
@@ -35,6 +40,24 @@ export async function getAll(
     res.json({
       success: true,
       message: "Products fetched successfully",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getOne(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const data = await getProductBySlug(getSlugParam(req));
+
+    res.json({
+      success: true,
+      message: "Product fetched successfully",
       data,
     });
   } catch (error) {

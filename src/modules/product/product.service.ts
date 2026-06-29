@@ -125,6 +125,74 @@ export async function getProductsByCategory(category: string) {
   return products.map(formatProductByCategory);
 }
 
+type DbMenuSubmenu = {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  createdAt: Date;
+};
+
+function formatProductDetail(
+  product: DbProduct & {
+    images: DbProductImage[];
+    menuSubmenu: DbMenuSubmenu;
+  },
+) {
+  return {
+    id: product.id,
+    menuSubmenuId: product.menuSubmenuId,
+    name: product.name,
+    slug: product.slug,
+    description: product.description,
+    price: product.price,
+    offerPrice: product.offerPrice,
+    stock: product.stock,
+    isActive: product.isActive,
+    images: product.images.map((image) => ({
+      id: image.id,
+      productId: image.productId,
+      imgUrl: image.imgUrl,
+      displayOrder: image.displayOrder,
+      isPrimary: image.isPrimary,
+    })),
+    menuSubmenu: {
+      id: product.menuSubmenu.id,
+      name: product.menuSubmenu.name,
+      slug: product.menuSubmenu.slug,
+      parentId: product.menuSubmenu.parentId,
+    },
+  };
+}
+
+export async function getProductBySlug(slug: string) {
+  const normalizedSlug = slugify(slug);
+
+  if (!normalizedSlug) {
+    throw new AppError(400, "Product slug is required");
+  }
+
+  const product = await prisma.product.findUnique({
+    where: {
+      slug: normalizedSlug,
+    },
+    include: {
+      images: {
+        orderBy: {
+          displayOrder: "asc",
+        },
+      },
+      menuSubmenu: true,
+    },
+  });
+
+  if (!product) {
+    throw new AppError(404, "Product not found");
+  }
+
+  return formatProductDetail(product);
+}
+
 async function buildProductFilter(menuId?: string, submenuId?: string) {
   if (submenuId) {
     const submenu = await prisma.menuSubmenu.findUnique({
