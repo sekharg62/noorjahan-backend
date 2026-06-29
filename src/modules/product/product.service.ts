@@ -66,6 +66,65 @@ function formatProductWithImages(
   };
 }
 
+function formatProductByCategory(
+  item: DbProduct & { images: DbProductImage[] },
+) {
+  return {
+    id: item.id,
+    menuSubmenuId: item.menuSubmenuId,
+    name: item.name,
+    slug: item.slug,
+    description: item.description,
+    price: item.price,
+    offerPrice: item.offerPrice,
+    stock: item.stock,
+    isActive: item.isActive,
+    images: item.images.map((image) => ({
+      id: image.id,
+      productId: image.productId,
+      imgUrl: image.imgUrl,
+      displayOrder: image.displayOrder,
+      isPrimary: image.isPrimary,
+    })),
+  };
+}
+
+export async function getProductsByCategory(category: string) {
+  const slug = slugify(category);
+
+  if (!slug) {
+    throw new AppError(400, "category is required");
+  }
+
+  const menuSubmenu = await prisma.menuSubmenu.findUnique({
+    where: { slug },
+  });
+
+  if (!menuSubmenu) {
+    throw new AppError(404, "Category not found");
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      isActive: true,
+      menuSubmenu: {
+        slug,
+      },
+    },
+    include: {
+      images: {
+        where: {
+          isPrimary: true,
+        },
+        take: 1,
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return products.map(formatProductByCategory);
+}
+
 async function buildProductFilter(menuId?: string, submenuId?: string) {
   if (submenuId) {
     const submenu = await prisma.menuSubmenu.findUnique({

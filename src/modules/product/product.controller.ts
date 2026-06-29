@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/adminAuth";
-import { createProduct, getAllProducts } from "./product.service";
+import { createProduct, getAllProducts, getProductsByCategory } from "./product.service";
 
 function getQueryParam(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -12,6 +12,19 @@ export async function getAll(
   next: NextFunction,
 ): Promise<void> {
   try {
+    const category = getQueryParam(req.query.category);
+
+    if (category) {
+      const data = await getProductsByCategory(category);
+
+      res.json({
+        success: true,
+        message: "Products fetched successfully",
+        data,
+      });
+      return;
+    }
+
     const data = await getAllProducts({
       page: getQueryParam(req.query.page),
       limit: getQueryParam(req.query.limit),
