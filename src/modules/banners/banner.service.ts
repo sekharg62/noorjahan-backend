@@ -1,4 +1,4 @@
-import { BannerType } from "../../../generated/prisma/client";
+import { BannerType } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { AppError } from "../../middleware/errorHandler";
 
