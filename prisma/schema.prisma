@@ -17,6 +17,20 @@ enum BannerType {
   PRODUCT
 }
 
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PACKING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  ONLINE
+}
+
 model Admin {
   id           String    @id @default(uuid()) @db.Uuid
   name         String
@@ -43,19 +57,20 @@ model MenuSubmenu {
 }
 
 model Product {
-  id            String         @id @default(uuid()) @db.Uuid
-  menuSubmenuId String         @map("menu_submenu_id") @db.Uuid
-  menuSubmenu   MenuSubmenu    @relation(fields: [menuSubmenuId], references: [id], onDelete: Cascade)
+  id            String      @id @default(uuid()) @db.Uuid
+  menuSubmenuId String      @map("menu_submenu_id") @db.Uuid
+  menuSubmenu   MenuSubmenu @relation(fields: [menuSubmenuId], references: [id], onDelete: Cascade)
   name          String
-  slug          String         @unique
+  slug          String      @unique
   description   String?
-  price         String
-  offerPrice    String?        @map("offer_price")
-  stock         Int            @default(0)
-  isActive      Boolean        @default(true) @map("is_active")
+  price         Decimal     @db.Decimal(10, 2)
+  offerPrice    Decimal?    @map("offer_price") @db.Decimal(10, 2)
+  stock         Int         @default(0)
+  isActive      Boolean     @default(true) @map("is_active")
   images        ProductImage[]
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  orderItems    OrderItem[]
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
 
   @@index([menuSubmenuId])
   @@map("products")
@@ -90,10 +105,11 @@ model Banner {
 model Customer {
   id           String            @id @default(uuid()) @db.Uuid
   name         String
-  email        String?           @unique
   phone        String            @unique
-  passwordHash String            @map("password_hash")
+  email        String?           @unique
+  passwordHash String?           @map("password_hash")
   addresses    CustomerAddress[]
+  orders       Order[]
   createdAt    DateTime          @default(now()) @map("created_at")
 
   @@map("customers")
@@ -103,14 +119,58 @@ model CustomerAddress {
   id            String   @id @default(uuid()) @db.Uuid
   customerId    String   @map("customer_id") @db.Uuid
   customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  fullName      String   @map("full_name")
+  phone         String
   address       String
   city          String
   pincode       String
   alternativePh String?  @map("alternative_ph")
   notes         String?
+  orders        Order[]
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@index([customerId])
   @@map("customer_address")
 }
 
+model Order {
+  id            String         @id @default(uuid()) @db.Uuid
+  orderNo       String         @unique @map("order_no")
+  customerId    String?        @map("customer_id") @db.Uuid
+  customer      Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  addressId     String?        @map("address_id") @db.Uuid
+  address       CustomerAddress? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  guestName     String?        @map("guest_name")
+  guestPhone    String?        @map("guest_phone")
+  guestEmail    String?        @map("guest_email")
+  guestAddress  String?        @map("guest_address")
+  guestCity     String?        @map("guest_city")
+  guestPincode  String?        @map("guest_pincode")
+  paymentMethod PaymentMethod  @map("payment_method")
+  status        OrderStatus    @default(PENDING)
+  subtotal      Decimal        @db.Decimal(10, 2)
+  shipping      Decimal        @default(0) @db.Decimal(10, 2)
+  total         Decimal        @db.Decimal(10, 2)
+  items         OrderItem[]
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@index([customerId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  orderId   String  @map("order_id") @db.Uuid
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String  @map("product_id") @db.Uuid
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Int
+  size      String?
+  price     Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}

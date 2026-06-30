@@ -4,6 +4,8 @@ import {
   buildPaginationMeta,
   parsePaginationQuery,
 } from "../../utils/pagination";
+import { formatDecimal, toDecimal } from "../../utils/decimal";
+import type { Decimal } from "@prisma/client/runtime/client";
 
 type DbProduct = {
   id: string;
@@ -11,8 +13,8 @@ type DbProduct = {
   name: string;
   slug: string;
   description: string | null;
-  price: string;
-  offerPrice: string | null;
+  price: Decimal;
+  offerPrice: Decimal | null;
   stock: number;
   isActive: boolean;
   createdAt: Date;
@@ -48,8 +50,8 @@ function formatProduct(item: DbProduct) {
     name: item.name,
     slug: item.slug,
     description: item.description,
-    price: item.price,
-    offerPrice: item.offerPrice,
+    price: formatDecimal(item.price)!,
+    offerPrice: formatDecimal(item.offerPrice),
     stock: item.stock,
     isActive: item.isActive,
     createdAt: item.createdAt.toISOString(),
@@ -75,8 +77,8 @@ function formatProductByCategory(
     name: item.name,
     slug: item.slug,
     description: item.description,
-    price: item.price,
-    offerPrice: item.offerPrice,
+    price: formatDecimal(item.price)!,
+    offerPrice: formatDecimal(item.offerPrice),
     stock: item.stock,
     isActive: item.isActive,
     images: item.images.map((image) => ({
@@ -301,8 +303,10 @@ export async function createProduct(input: CreateProductInput) {
   const name = input.name.trim();
   const slug = slugify(input.slug);
   const description = input.description.trim();
-  const price = input.price.trim();
-  const offerPrice = input.offerPrice?.trim() || null;
+  const price = toDecimal(input.price);
+  const offerPrice = input.offerPrice?.trim()
+    ? toDecimal(input.offerPrice)
+    : null;
 
   if (!menuSubmenuId) {
     throw new AppError(400, "menuSubmenuId is required");
@@ -320,8 +324,18 @@ export async function createProduct(input: CreateProductInput) {
     throw new AppError(400, "description is required");
   }
 
-  if (!price) {
-    throw new AppError(400, "price is required");
+  try {
+    toDecimal(input.price);
+  } catch {
+    throw new AppError(400, "price must be a valid number");
+  }
+
+  if (input.offerPrice?.trim()) {
+    try {
+      toDecimal(input.offerPrice);
+    } catch {
+      throw new AppError(400, "offerPrice must be a valid number");
+    }
   }
 
   if (
