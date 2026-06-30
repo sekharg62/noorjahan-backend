@@ -277,12 +277,12 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-async function ensureUniqueSlug(slug: string): Promise<void> {
+async function ensureUniqueSlug(slug: string, excludeId?: string): Promise<void> {
   const existing = await prisma.product.findUnique({
     where: { slug },
   });
 
-  if (existing) {
+  if (existing && existing.id !== excludeId) {
     throw new AppError(409, "Slug already exists");
   }
 }
@@ -369,4 +369,159 @@ export async function createProduct(input: CreateProductInput) {
   });
 
   return formatProduct(product);
+}
+
+export async function patchProduct(
+  id: string,
+  input: {
+    menuSubmenuId?: string;
+    name?: string;
+    slug?: string;
+    description?: string;
+    price?: string;
+    offerPrice?: string | null;
+    stock?: number;
+    isActive?: boolean;
+  },
+) {
+  const existing = await prisma.product.findUnique({ where: { id } });
+
+  if (!existing) {
+    throw new AppError(404, "Product not found");
+  }
+
+  if (
+    input.menuSubmenuId === undefined &&
+    input.name === undefined &&
+    input.slug === undefined &&
+    input.description === undefined &&
+    input.price === undefined &&
+    input.offerPrice === undefined &&
+    input.stock === undefined &&
+    input.isActive === undefined
+  ) {
+    throw new AppError(400, "At least one field is required to update");
+  }
+
+  const data: {
+    menuSubmenuId?: string;
+    name?: string;
+    slug?: string;
+    description?: string;
+    price?: Decimal;
+    offerPrice?: Decimal | null;
+    stock?: number;
+    isActive?: boolean;
+  } = {};
+
+  if (input.menuSubmenuId !== undefined) {
+    const menuSubmenuId = input.menuSubmenuId.trim();
+
+    if (!menuSubmenuId) {
+      throw new AppError(400, "menuSubmenuId cannot be empty");
+    }
+
+    const menuSubmenu = await prisma.menuSubmenu.findUnique({
+      where: { id: menuSubmenuId },
+    });
+
+    if (!menuSubmenu) {
+      throw new AppError(404, "Menu submenu not found");
+    }
+
+    data.menuSubmenuId = menuSubmenuId;
+  }
+
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+
+    if (!name) {
+      throw new AppError(400, "name cannot be empty");
+    }
+
+    data.name = name;
+  }
+
+  if (input.slug !== undefined) {
+    const slug = slugify(input.slug);
+
+    if (!slug) {
+      throw new AppError(400, "slug is required");
+    }
+
+    await ensureUniqueSlug(slug, id);
+    data.slug = slug;
+  }
+
+  if (input.description !== undefined) {
+    const description = input.description.trim();
+
+    if (!description) {
+      throw new AppError(400, "description cannot be empty");
+    }
+
+    data.description = description;
+  }
+
+  if (input.price !== undefined) {
+    try {
+      data.price = toDecimal(input.price);
+    } catch {
+      throw new AppError(400, "price must be a valid number");
+    }
+  }
+
+  if (input.offerPrice !== undefined) {
+    if (input.offerPrice === null || !input.offerPrice.trim()) {
+      data.offerPrice = null;
+    } else {
+      try {
+        data.offerPrice = toDecimal(input.offerPrice);
+      } catch {
+        throw new AppError(400, "offerPrice must be a valid number");
+      }
+    }
+  }
+
+  if (input.stock !== undefined) {
+    if (!Number.isInteger(input.stock) || input.stock < 0) {
+      throw new AppError(400, "stock must be a non-negative integer");
+    }
+
+    data.stock = input.stock;
+  }
+
+  if (input.isActive !== undefined) {
+    data.isActive = input.isActive;
+  }
+
+  const product = await prisma.product.update({
+    where: { id },
+    data,
+  });
+
+  return formatProduct(product);
+}
+
+export async function deleteProduct(id: string) {
+  const existing = await prisma.product.findUnique({ where: { id } });
+
+  if (!existing) {
+    throw new AppError(404, "Product not found");
+  }
+
+  const orderItemCount = await prisma.orderItem.count({
+    where: { productId: id },
+  });
+
+  if (orderItemCount > 0) {
+    throw new AppError(
+      409,
+      "Cannot delete product that has been ordered",
+    );
+  }
+
+  await prisma.product.delete({ where: { id } });
+
+  return formatProduct(existing);
 }

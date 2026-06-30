@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/adminAuth";
-import { createProduct, getAllProducts, getProductBySlug, getProductsByCategory } from "./product.service";
+import { createProduct, deleteProduct, getAllProducts, getProductBySlug, getProductsByCategory, patchProduct } from "./product.service";
 
 function getQueryParam(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -9,6 +9,11 @@ function getQueryParam(value: unknown): string | undefined {
 function getSlugParam(req: Request): string {
   const { slug } = req.params;
   return Array.isArray(slug) ? slug[0] : slug;
+}
+
+function getIdParam(req: Request): string {
+  const { id } = req.params;
+  return Array.isArray(id) ? id[0] : id;
 }
 
 export async function getAll(
@@ -97,6 +102,63 @@ export async function create(
     res.status(201).json({
       success: true,
       message: "Product created successfully",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function patch(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { menuSubmenuId, name, slug, description, price, offerPrice, stock, isActive } =
+      req.body as {
+        menuSubmenuId?: string;
+        name?: string;
+        slug?: string;
+        description?: string;
+        price?: string;
+        offerPrice?: string | null;
+        stock?: number;
+        isActive?: boolean;
+      };
+
+    const data = await patchProduct(getIdParam(req), {
+      menuSubmenuId,
+      name,
+      slug,
+      description,
+      price,
+      offerPrice,
+      stock,
+      isActive,
+    });
+
+    res.json({
+      success: true,
+      message: "Product updated successfully",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function remove(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const data = await deleteProduct(getIdParam(req));
+
+    res.json({
+      success: true,
+      message: "Product deleted successfully",
       data,
     });
   } catch (error) {
