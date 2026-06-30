@@ -127,6 +127,99 @@ export async function getProductsByCategory(category: string) {
   return products.map(formatProductByCategory);
 }
 
+function formatSearchProduct(
+  item: DbProduct & {
+    images: DbProductImage[];
+    menuSubmenu: DbMenuSubmenu & { parent: DbMenuSubmenu | null };
+  },
+) {
+  const primaryImage = item.images[0] ?? null;
+
+  return {
+    id: item.id,
+    name: item.name,
+    slug: item.slug,
+    description: item.description,
+    price: formatDecimal(item.price)!,
+    offerPrice: formatDecimal(item.offerPrice),
+    stock: item.stock,
+    category: {
+      id: item.menuSubmenu.id,
+      name: item.menuSubmenu.name,
+      slug: item.menuSubmenu.slug,
+      parent: item.menuSubmenu.parent
+        ? {
+            id: item.menuSubmenu.parent.id,
+            name: item.menuSubmenu.parent.name,
+            slug: item.menuSubmenu.parent.slug,
+          }
+        : null,
+    },
+    primaryImage: primaryImage
+      ? {
+          id: primaryImage.id,
+          imgUrl: primaryImage.imgUrl,
+          displayOrder: primaryImage.displayOrder,
+          isPrimary: primaryImage.isPrimary,
+        }
+      : null,
+  };
+}
+
+export async function searchProducts(query: string) {
+  const search = query.trim();
+
+  if (!search) {
+    throw new AppError(400, "q is required");
+  }
+
+  const slugSearch = slugify(search);
+
+  const products = await prisma.product.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { name: { contains: search, mode: "insensitive" } },
+        { slug: { contains: slugSearch, mode: "insensitive" } },
+        { menuSubmenu: { name: { contains: search, mode: "insensitive" } } },
+        ...(slugSearch
+          ? [{ menuSubmenu: { slug: { contains: slugSearch } } }]
+          : []),
+        {
+          menuSubmenu: {
+            parent: { name: { contains: search, mode: "insensitive" } },
+          },
+        },
+        ...(slugSearch
+          ? [
+              {
+                menuSubmenu: {
+                  parent: { slug: { contains: slugSearch } },
+                },
+              },
+            ]
+          : []),
+      ],
+    },
+    include: {
+      menuSubmenu: {
+        include: {
+          parent: true,
+        },
+      },
+      images: {
+        where: {
+          isPrimary: true,
+        },
+        take: 1,
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return products.map(formatSearchProduct);
+}
+
 type DbMenuSubmenu = {
   id: string;
   name: string;

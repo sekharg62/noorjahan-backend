@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { AuthenticatedRequest } from "../../middleware/adminAuth";
-import { createProduct, deleteProduct, getAllProducts, getProductBySlug, getProductsByCategory, patchProduct } from "./product.service";
+import { createProduct, deleteProduct, getAllProducts, getProductBySlug, getProductsByCategory, patchProduct, searchProducts } from "./product.service";
 
 function getQueryParam(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -45,6 +45,34 @@ export async function getAll(
     res.json({
       success: true,
       message: "Products fetched successfully",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function search(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const q = getQueryParam(req.query.q) ?? getQueryParam(req.query.search);
+
+    if (!q?.trim()) {
+      res.status(400).json({
+        success: false,
+        message: "q is required",
+      });
+      return;
+    }
+
+    const data = await searchProducts(q);
+
+    res.json({
+      success: true,
+      message: "Products searched successfully",
       data,
     });
   } catch (error) {
