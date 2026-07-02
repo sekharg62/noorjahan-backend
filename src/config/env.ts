@@ -18,8 +18,8 @@ export const env = {
     expiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   },
   supabase: {
-    url: requireEnv("SUPABASE_URL"),
-    anonKey: requireEnv("SUPABASE_ANON_KEY"),
+    url: process.env.SUPABASE_URL,
+    anonKey: process.env.SUPABASE_ANON_KEY,
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   },
 } as const;
