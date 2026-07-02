@@ -4,7 +4,7 @@
   "description": "Noorjahan E-Commerce API — Express, TypeScript, Prisma, Supabase",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "npm run build",
    "build": "npx prisma generate && tsc",
     "start": "node dist/src/index.js",
     "postinstall": "npx prisma generate",
