@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database";
 import { AppError } from "../../middleware/errorHandler";
+import type { Prisma } from "@prisma/client";
 import {
   buildPaginationMeta,
   parsePaginationQuery,
@@ -16,6 +17,7 @@ type DbProduct = {
   price: Decimal;
   offerPrice: Decimal | null;
   isActive: boolean;
+  showHomePage: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -92,6 +94,7 @@ function formatProduct(item: DbProduct) {
     price: formatDecimal(item.price)!,
     offerPrice: formatDecimal(item.offerPrice),
     isActive: item.isActive,
+    showHomePage: item.showHomePage,
     sizes: [] as ReturnType<typeof formatProductSize>[],
     totalStock: 0,
     createdAt: item.createdAt.toISOString(),
@@ -132,6 +135,7 @@ function formatProductByCategory(
     price: formatDecimal(item.price)!,
     offerPrice: formatDecimal(item.offerPrice),
     isActive: item.isActive,
+    showHomePage: item.showHomePage,
     sizes,
     totalStock,
     images: item.images.map((image) => ({
@@ -309,6 +313,7 @@ function formatProductDetail(
     price: formatDecimal(product.price)!,
     offerPrice: formatDecimal(product.offerPrice),
     isActive: product.isActive,
+    showHomePage: product.showHomePage,
     sizes,
     totalStock,
     images: product.images.map((image) => ({
@@ -410,18 +415,43 @@ async function buildProductFilter(menuId?: string, submenuId?: string) {
   return {};
 }
 
+function parseShowHomeQuery(value?: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  throw new AppError(400, "showHome must be true or false");
+}
+
 export async function getAllProducts(query?: {
   page?: string;
   limit?: string;
   menuId?: string;
   submenuId?: string;
+  showHome?: string;
 }) {
   const { page, limit, skip } = parsePaginationQuery({
     page: query?.page,
     limit: query?.limit,
   });
 
-  const where = await buildProductFilter(query?.menuId, query?.submenuId);
+  const showHome = parseShowHomeQuery(query?.showHome);
+  const where = {
+    ...(await buildProductFilter(query?.menuId, query?.submenuId)),
+    ...(showHome === true
+      ? { showHomePage: true, isActive: true }
+      : showHome === false
+        ? { showHomePage: false }
+        : {}),
+  };
 
   const [total, products] = await Promise.all([
     prisma.product.count({ where }),
@@ -471,6 +501,7 @@ interface CreateProductInput {
   price: string;
   offerPrice?: string;
   isActive?: boolean;
+  showHomePage?: boolean;
 }
 
 export async function createProduct(input: CreateProductInput) {
@@ -534,6 +565,7 @@ export async function createProduct(input: CreateProductInput) {
       price,
       offerPrice,
       isActive: input.isActive ?? true,
+      showHomePage: input.showHomePage ?? false,
     },
   });
 
@@ -550,6 +582,7 @@ export async function patchProduct(
     price?: string;
     offerPrice?: string | null;
     isActive?: boolean;
+    showHomePage?: boolean;
   },
 ) {
   const existing = await prisma.product.findUnique({ where: { id } });
@@ -565,20 +598,13 @@ export async function patchProduct(
     input.description === undefined &&
     input.price === undefined &&
     input.offerPrice === undefined &&
-    input.isActive === undefined
+    input.isActive === undefined &&
+    input.showHomePage === undefined
   ) {
     throw new AppError(400, "At least one field is required to update");
   }
 
-  const data: {
-    menuSubmenuId?: string;
-    name?: string;
-    slug?: string;
-    description?: string;
-    price?: Decimal;
-    offerPrice?: Decimal | null;
-    isActive?: boolean;
-  } = {};
+  const data: Prisma.ProductUpdateInput = {};
 
   if (input.menuSubmenuId !== undefined) {
     const menuSubmenuId = input.menuSubmenuId.trim();
@@ -595,7 +621,7 @@ export async function patchProduct(
       throw new AppError(404, "Menu submenu not found");
     }
 
-    data.menuSubmenuId = menuSubmenuId;
+    data.menuSubmenu = { connect: { id: menuSubmenuId } };
   }
 
   if (input.name !== undefined) {
@@ -651,6 +677,10 @@ export async function patchProduct(
 
   if (input.isActive !== undefined) {
     data.isActive = input.isActive;
+  }
+
+  if (input.showHomePage !== undefined) {
+    data.showHomePage = input.showHomePage;
   }
 
   const product = await prisma.product.update({

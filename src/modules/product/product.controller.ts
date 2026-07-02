@@ -40,6 +40,7 @@ export async function getAll(
       limit: getQueryParam(req.query.limit),
       menuId: getQueryParam(req.query.menuId),
       submenuId: getQueryParam(req.query.submenuId),
+      showHome: getQueryParam(req.query.showHome),
     });
 
     res.json({
@@ -104,7 +105,7 @@ export async function create(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { menuSubmenuId, name, slug, description, price, offerPrice, isActive } =
+    const { menuSubmenuId, name, slug, description, price, offerPrice, isActive, showHomePage } =
       req.body as {
         menuSubmenuId?: string;
         name?: string;
@@ -113,6 +114,7 @@ export async function create(
         price?: string;
         offerPrice?: string;
         isActive?: boolean;
+        showHomePage?: boolean;
       };
 
     const data = await createProduct({
@@ -123,6 +125,7 @@ export async function create(
       price: price ?? "",
       offerPrice,
       isActive,
+      showHomePage,
     });
 
     res.status(201).json({
@@ -141,7 +144,7 @@ export async function patch(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { menuSubmenuId, name, slug, description, price, offerPrice, isActive } =
+    const { menuSubmenuId, name, slug, description, price, offerPrice, isActive, showHomePage } =
       req.body as {
         menuSubmenuId?: string;
         name?: string;
@@ -150,6 +153,7 @@ export async function patch(
         price?: string;
         offerPrice?: string | null;
         isActive?: boolean;
+        showHomePage?: boolean;
       };
 
     const data = await patchProduct(getIdParam(req), {
@@ -160,6 +164,7 @@ export async function patch(
       price,
       offerPrice,
       isActive,
+      showHomePage,
     });
 
     res.json({

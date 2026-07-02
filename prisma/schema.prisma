@@ -69,6 +69,7 @@ model Product {
   price         Decimal     @db.Decimal(10, 2)
   offerPrice    Decimal?    @map("offer_price") @db.Decimal(10, 2)
   isActive      Boolean     @default(true) @map("is_active")
+  showHomePage  Boolean     @default(false) @map("show_home_page")
   images        ProductImage[]
   productSizes  ProductSize[]
   orderItems    OrderItem[]
