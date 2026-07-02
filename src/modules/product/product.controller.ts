@@ -104,7 +104,7 @@ export async function create(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { menuSubmenuId, name, slug, description, price, offerPrice, stock, isActive } =
+    const { menuSubmenuId, name, slug, description, price, offerPrice, isActive } =
       req.body as {
         menuSubmenuId?: string;
         name?: string;
@@ -112,7 +112,6 @@ export async function create(
         description?: string;
         price?: string;
         offerPrice?: string;
-        stock?: number;
         isActive?: boolean;
       };
 
@@ -123,7 +122,6 @@ export async function create(
       description: description ?? "",
       price: price ?? "",
       offerPrice,
-      stock,
       isActive,
     });
 
@@ -143,7 +141,7 @@ export async function patch(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { menuSubmenuId, name, slug, description, price, offerPrice, stock, isActive } =
+    const { menuSubmenuId, name, slug, description, price, offerPrice, isActive } =
       req.body as {
         menuSubmenuId?: string;
         name?: string;
@@ -151,7 +149,6 @@ export async function patch(
         description?: string;
         price?: string;
         offerPrice?: string | null;
-        stock?: number;
         isActive?: boolean;
       };
 
@@ -162,7 +159,6 @@ export async function patch(
       description,
       price,
       offerPrice,
-      stock,
       isActive,
     });
 

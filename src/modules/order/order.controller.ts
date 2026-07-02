@@ -34,10 +34,12 @@ export async function create(
         pincode?: string;
       };
       paymentMethod?: string;
+      paymentSenderNumber?: string;
+      paymentTransactionId?: string;
       items?: Array<{
         productId?: string;
         quantity?: number;
-        size?: string;
+        sizeId?: string;
       }>;
     };
 
@@ -55,10 +57,12 @@ export async function create(
           }
         : undefined,
       paymentMethod: body.paymentMethod ?? "",
+      paymentSenderNumber: body.paymentSenderNumber,
+      paymentTransactionId: body.paymentTransactionId,
       items: (body.items ?? []).map((item) => ({
         productId: item.productId ?? "",
         quantity: item.quantity ?? 0,
-        size: item.size,
+        sizeId: item.sizeId ?? "",
       })),
     });
 

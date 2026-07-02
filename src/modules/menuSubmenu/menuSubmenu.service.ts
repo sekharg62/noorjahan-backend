@@ -283,10 +283,40 @@ export async function patchMenuSubmenu(id: string, input: PatchMenuSubmenuInput)
 }
 
 export async function deleteMenuSubmenu(id: string) {
-  const existing = await prisma.menuSubmenu.findUnique({ where: { id } });
+  const existing = await prisma.menuSubmenu.findUnique({
+    where: { id },
+    include: {
+      children: { select: { id: true } },
+      products: { select: { id: true } },
+    },
+  });
 
   if (!existing) {
     throw new AppError(404, "Menu item not found");
+  }
+
+  if (existing.children.length > 0) {
+    throw new AppError(400, "Cannot delete menu item that has submenus");
+  }
+
+  if (existing.products.length > 0) {
+    const orderedProductCount = await prisma.orderItem.count({
+      where: {
+        productId: { in: existing.products.map((product) => product.id) },
+      },
+    });
+
+    if (orderedProductCount > 0) {
+      throw new AppError(
+        409,
+        "Cannot delete category with products that have been ordered",
+      );
+    }
+
+    throw new AppError(
+      409,
+      "Cannot delete category that has products. Delete products first",
+    );
   }
 
   await prisma.menuSubmenu.delete({ where: { id } });

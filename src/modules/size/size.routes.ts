@@ -1,16 +1,12 @@
 import { Router } from "express";
 import { adminAuth } from "../../middleware/adminAuth";
-import { create, getAll, getOne, patch, remove, search } from "./product.controller";
-import productSizeRoutes from "./productSize/productSize.routes";
+import { create, getAll, patch, remove } from "./size.controller";
 
 const router = Router();
 
 router.get("/", getAll);
-router.get("/search", search);
 router.post("/", adminAuth, create);
-router.use("/:productId/sizes", productSizeRoutes);
 router.patch("/:id", adminAuth, patch);
 router.delete("/:id", adminAuth, remove);
-router.get("/:slug", getOne);
 
 export default router;

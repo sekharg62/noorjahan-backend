@@ -21,7 +21,7 @@ const ORDER_STATUSES = new Set<string>(Object.values(OrderStatus));
 interface OrderItemInput {
   productId: string;
   quantity: number;
-  size?: string;
+  sizeId: string;
 }
 
 interface GuestInput {
@@ -38,8 +38,16 @@ interface PlaceOrderInput {
   addressId?: string;
   guest?: GuestInput;
   paymentMethod: string;
+  paymentSenderNumber?: string;
+  paymentTransactionId?: string;
   items: OrderItemInput[];
 }
+
+const MOBILE_PAYMENT_METHODS = new Set<PaymentMethod>([
+  PaymentMethod.BKASH,
+  PaymentMethod.NAGAD,
+  PaymentMethod.ROCKET,
+]);
 
 type OrderWithRelations = Order & {
   items: (OrderItem & { product: Product })[];
@@ -65,10 +73,31 @@ function parsePaymentMethod(value: string): PaymentMethod {
   const method = value.toUpperCase();
 
   if (!PAYMENT_METHODS.has(method)) {
-    throw new AppError(400, "paymentMethod must be COD or ONLINE");
+    throw new AppError(
+      400,
+      "paymentMethod must be COD, BKASH, NAGAD, or ROCKET",
+    );
   }
 
   return method as PaymentMethod;
+}
+
+function validateMobilePaymentDetails(
+  paymentMethod: PaymentMethod,
+  paymentSenderNumber?: string,
+  paymentTransactionId?: string,
+) {
+  if (!MOBILE_PAYMENT_METHODS.has(paymentMethod)) {
+    return;
+  }
+
+  if (!paymentSenderNumber?.trim()) {
+    throw new AppError(400, "paymentSenderNumber is required");
+  }
+
+  if (!paymentTransactionId?.trim()) {
+    throw new AppError(400, "paymentTransactionId is required");
+  }
 }
 
 function parseOrderStatus(value: string): OrderStatus {
@@ -108,6 +137,8 @@ function formatOrder(order: OrderWithRelations) {
     orderNo: order.orderNo,
     status: order.status,
     paymentMethod: order.paymentMethod,
+    paymentSenderNumber: order.paymentSenderNumber,
+    paymentTransactionId: order.paymentTransactionId,
     subtotal: formatDecimal(order.subtotal),
     shipping: formatDecimal(order.shipping),
     total: formatDecimal(order.total),
@@ -158,6 +189,10 @@ function validateItems(items: OrderItemInput[]): OrderItemInput[] {
       throw new AppError(400, "productId is required for each item");
     }
 
+    if (!item.sizeId?.trim()) {
+      throw new AppError(400, "sizeId is required for each item");
+    }
+
     if (!Number.isInteger(item.quantity) || item.quantity < 1) {
       throw new AppError(400, "quantity must be a positive integer");
     }
@@ -165,7 +200,7 @@ function validateItems(items: OrderItemInput[]): OrderItemInput[] {
     return {
       productId: item.productId.trim(),
       quantity: item.quantity,
-      size: item.size?.trim() || undefined,
+      sizeId: item.sizeId.trim(),
     };
   });
 }
@@ -173,6 +208,11 @@ function validateItems(items: OrderItemInput[]): OrderItemInput[] {
 export async function placeOrder(input: PlaceOrderInput) {
   const items = validateItems(input.items);
   const paymentMethod = parsePaymentMethod(input.paymentMethod);
+  validateMobilePaymentDetails(
+    paymentMethod,
+    input.paymentSenderNumber,
+    input.paymentTransactionId,
+  );
   const isGuestOrder = Boolean(input.guest);
   const isLoggedInOrder = Boolean(input.customerId);
 
@@ -220,6 +260,11 @@ export async function placeOrder(input: PlaceOrderInput) {
       id: { in: productIds },
       isActive: true,
     },
+    include: {
+      productSizes: {
+        include: { size: true },
+      },
+    },
   });
 
   if (products.length !== productIds.length) {
@@ -231,11 +276,21 @@ export async function placeOrder(input: PlaceOrderInput) {
   let subtotal = new Decimal(0);
   const lineItems = items.map((item) => {
     const product = productMap.get(item.productId)!;
+    const productSize = product.productSizes.find(
+      (entry) => entry.sizeId === item.sizeId,
+    );
 
-    if (product.stock < item.quantity) {
+    if (!productSize) {
       throw new AppError(
         400,
-        `Insufficient stock for product: ${product.name}`,
+        `Invalid size selected for product: ${product.name}`,
+      );
+    }
+
+    if (productSize.stock < item.quantity) {
+      throw new AppError(
+        400,
+        `Insufficient stock for ${product.name} (${productSize.size.label})`,
       );
     }
 
@@ -245,8 +300,9 @@ export async function placeOrder(input: PlaceOrderInput) {
 
     return {
       productId: product.id,
+      productSizeId: productSize.id,
       quantity: item.quantity,
-      size: item.size,
+      size: productSize.size.label,
       price: unitPrice,
     };
   });
@@ -264,9 +320,9 @@ export async function placeOrder(input: PlaceOrderInput) {
     }
 
     for (const item of lineItems) {
-      const updated = await tx.product.updateMany({
+      const updated = await tx.productSize.updateMany({
         where: {
-          id: item.productId,
+          id: item.productSizeId,
           stock: { gte: item.quantity },
         },
         data: {
@@ -275,7 +331,7 @@ export async function placeOrder(input: PlaceOrderInput) {
       });
 
       if (updated.count === 0) {
-        throw new AppError(400, "Insufficient stock for one or more products");
+        throw new AppError(400, "Insufficient stock for one or more items");
       }
     }
 
@@ -291,12 +347,19 @@ export async function placeOrder(input: PlaceOrderInput) {
         guestCity: input.guest?.city.trim() ?? null,
         guestPincode: input.guest?.pincode.trim() ?? null,
         paymentMethod,
+        paymentSenderNumber: input.paymentSenderNumber?.trim() || null,
+        paymentTransactionId: input.paymentTransactionId?.trim() || null,
         status: OrderStatus.PENDING,
         subtotal,
         shipping,
         total,
         items: {
-          create: lineItems,
+          create: lineItems.map(({ productId, quantity, size, price }) => ({
+            productId,
+            quantity,
+            size,
+            price,
+          })),
         },
       },
       include: {

@@ -28,7 +28,9 @@ enum OrderStatus {
 
 enum PaymentMethod {
   COD
-  ONLINE
+  BKASH
+  NAGAD
+  ROCKET
 }
 
 model Admin {
@@ -50,6 +52,7 @@ model MenuSubmenu {
   parent    MenuSubmenu?  @relation("MenuHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children  MenuSubmenu[] @relation("MenuHierarchy")
   products  Product[]
+  categorySizes CategorySize[]
   createdAt DateTime      @default(now()) @map("created_at")
 
   @@index([parentId])
@@ -65,9 +68,9 @@ model Product {
   description   String?
   price         Decimal     @db.Decimal(10, 2)
   offerPrice    Decimal?    @map("offer_price") @db.Decimal(10, 2)
-  stock         Int         @default(0)
   isActive      Boolean     @default(true) @map("is_active")
   images        ProductImage[]
+  productSizes  ProductSize[]
   orderItems    OrderItem[]
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
@@ -89,6 +92,47 @@ model ProductImage {
   @@unique([productId, displayOrder])
   @@index([productId])
   @@map("product_img")
+}
+
+model Size {
+  id            String         @id @default(uuid()) @db.Uuid
+  label         String         @unique // S, M, L, XL, 28, 30, UK-8, Free Size
+  sortOrder     Int            @default(0) @map("sort_order")
+  description   String?        // e.g. "Chest 38–40 inches"
+  categorySizes CategorySize[]
+  productSizes  ProductSize[]
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  @@map("sizes")
+}
+
+model CategorySize {
+  id            String      @id @default(uuid()) @db.Uuid
+  menuSubmenuId String      @map("menu_submenu_id") @db.Uuid
+  menuSubmenu   MenuSubmenu @relation(fields: [menuSubmenuId], references: [id], onDelete: Cascade)
+  sizeId        String      @map("size_id") @db.Uuid
+  size          Size        @relation(fields: [sizeId], references: [id], onDelete: Cascade)
+  displayOrder  Int         @default(0) @map("display_order")
+
+  @@unique([menuSubmenuId, sizeId])
+  @@index([menuSubmenuId])
+  @@map("category_sizes")
+}
+
+model ProductSize {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sizeId    String   @map("size_id") @db.Uuid
+  size      Size     @relation(fields: [sizeId], references: [id], onDelete: Restrict)
+  stock     Int      @default(0)
+  sku       String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([productId, sizeId])
+  @@index([productId])
+  @@map("product_sizes")
 }
 
 model Banner {
@@ -146,7 +190,9 @@ model Order {
   guestAddress  String?        @map("guest_address")
   guestCity     String?        @map("guest_city")
   guestPincode  String?        @map("guest_pincode")
-  paymentMethod PaymentMethod  @map("payment_method")
+  paymentMethod          PaymentMethod  @map("payment_method")
+  paymentSenderNumber    String?        @map("payment_sender_number")
+  paymentTransactionId   String?        @map("payment_transaction_id")
   status        OrderStatus    @default(PENDING)
   subtotal      Decimal        @db.Decimal(10, 2)
   shipping      Decimal        @default(0) @db.Decimal(10, 2)

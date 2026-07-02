@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { adminAuth } from "../../middleware/adminAuth";
+import categorySizeRoutes from "./categorySize/categorySize.routes";
 import {
   create,
   getAll,
@@ -12,6 +13,7 @@ import {
 const router = Router();
 
 router.get("/", getAll);
+router.use("/:menuSubmenuId/sizes", categorySizeRoutes);
 router.get("/:id", getOne);
 
 router.post("/", adminAuth, create);

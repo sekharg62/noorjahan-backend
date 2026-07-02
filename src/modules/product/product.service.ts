@@ -15,10 +15,30 @@ type DbProduct = {
   description: string | null;
   price: Decimal;
   offerPrice: Decimal | null;
-  stock: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type DbSize = {
+  id: string;
+  label: string;
+  sortOrder: number;
+  description: string | null;
+};
+
+type DbProductSize = {
+  id: string;
+  stock: number;
+  sku: string | null;
+  size: DbSize;
+};
+
+const productSizesInclude = {
+  productSizes: {
+    include: { size: true },
+    orderBy: { size: { sortOrder: "asc" as const } },
+  },
 };
 
 type DbProductImage = {
@@ -43,6 +63,25 @@ function formatProductImage(item: DbProductImage) {
   };
 }
 
+function formatProductSize(item: DbProductSize) {
+  return {
+    id: item.id,
+    sizeId: item.size.id,
+    label: item.size.label,
+    sortOrder: item.size.sortOrder,
+    description: item.size.description,
+    stock: item.stock,
+    sku: item.sku,
+  };
+}
+
+function formatSizesSummary(productSizes: DbProductSize[]) {
+  const sizes = productSizes.map(formatProductSize);
+  const totalStock = sizes.reduce((sum, size) => sum + size.stock, 0);
+
+  return { sizes, totalStock };
+}
+
 function formatProduct(item: DbProduct) {
   return {
     id: item.id,
@@ -52,25 +91,38 @@ function formatProduct(item: DbProduct) {
     description: item.description,
     price: formatDecimal(item.price)!,
     offerPrice: formatDecimal(item.offerPrice),
-    stock: item.stock,
     isActive: item.isActive,
+    sizes: [] as ReturnType<typeof formatProductSize>[],
+    totalStock: 0,
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
   };
 }
 
 function formatProductWithImages(
-  item: DbProduct & { images: DbProductImage[] },
+  item: DbProduct & {
+    images: DbProductImage[];
+    productSizes: DbProductSize[];
+  },
 ) {
+  const { sizes, totalStock } = formatSizesSummary(item.productSizes);
+
   return {
     ...formatProduct(item),
+    sizes,
+    totalStock,
     images: item.images.map(formatProductImage),
   };
 }
 
 function formatProductByCategory(
-  item: DbProduct & { images: DbProductImage[] },
+  item: DbProduct & {
+    images: DbProductImage[];
+    productSizes: DbProductSize[];
+  },
 ) {
+  const { sizes, totalStock } = formatSizesSummary(item.productSizes);
+
   return {
     id: item.id,
     menuSubmenuId: item.menuSubmenuId,
@@ -79,8 +131,9 @@ function formatProductByCategory(
     description: item.description,
     price: formatDecimal(item.price)!,
     offerPrice: formatDecimal(item.offerPrice),
-    stock: item.stock,
     isActive: item.isActive,
+    sizes,
+    totalStock,
     images: item.images.map((image) => ({
       id: image.id,
       productId: image.productId,
@@ -120,6 +173,7 @@ export async function getProductsByCategory(category: string) {
         },
         take: 1,
       },
+      ...productSizesInclude,
     },
     orderBy: { name: "asc" },
   });
@@ -130,10 +184,12 @@ export async function getProductsByCategory(category: string) {
 function formatSearchProduct(
   item: DbProduct & {
     images: DbProductImage[];
+    productSizes: DbProductSize[];
     menuSubmenu: DbMenuSubmenu & { parent: DbMenuSubmenu | null };
   },
 ) {
   const primaryImage = item.images[0] ?? null;
+  const { sizes, totalStock } = formatSizesSummary(item.productSizes);
 
   return {
     id: item.id,
@@ -142,7 +198,8 @@ function formatSearchProduct(
     description: item.description,
     price: formatDecimal(item.price)!,
     offerPrice: formatDecimal(item.offerPrice),
-    stock: item.stock,
+    sizes,
+    totalStock,
     category: {
       id: item.menuSubmenu.id,
       name: item.menuSubmenu.name,
@@ -213,6 +270,7 @@ export async function searchProducts(query: string) {
         },
         take: 1,
       },
+      ...productSizesInclude,
     },
     orderBy: { name: "asc" },
   });
@@ -231,25 +289,41 @@ type DbMenuSubmenu = {
 function formatProductDetail(
   product: DbProduct & {
     images: DbProductImage[];
-    menuSubmenu: DbMenuSubmenu;
+    productSizes: DbProductSize[];
+    menuSubmenu: DbMenuSubmenu & {
+      categorySizes: Array<{
+        displayOrder: number;
+        size: DbSize;
+      }>;
+    };
   },
 ) {
+  const { sizes, totalStock } = formatSizesSummary(product.productSizes);
+
   return {
     id: product.id,
     menuSubmenuId: product.menuSubmenuId,
     name: product.name,
     slug: product.slug,
     description: product.description,
-    price: product.price,
-    offerPrice: product.offerPrice,
-    stock: product.stock,
+    price: formatDecimal(product.price)!,
+    offerPrice: formatDecimal(product.offerPrice),
     isActive: product.isActive,
+    sizes,
+    totalStock,
     images: product.images.map((image) => ({
       id: image.id,
       productId: image.productId,
       imgUrl: image.imgUrl,
       displayOrder: image.displayOrder,
       isPrimary: image.isPrimary,
+    })),
+    categorySizes: product.menuSubmenu.categorySizes.map((categorySize) => ({
+      sizeId: categorySize.size.id,
+      label: categorySize.size.label,
+      sortOrder: categorySize.size.sortOrder,
+      description: categorySize.size.description,
+      displayOrder: categorySize.displayOrder,
     })),
     menuSubmenu: {
       id: product.menuSubmenu.id,
@@ -277,7 +351,15 @@ export async function getProductBySlug(slug: string) {
           displayOrder: "asc",
         },
       },
-      menuSubmenu: true,
+      menuSubmenu: {
+        include: {
+          categorySizes: {
+            include: { size: true },
+            orderBy: { displayOrder: "asc" },
+          },
+        },
+      },
+      ...productSizesInclude,
     },
   });
 
@@ -352,6 +434,7 @@ export async function getAllProducts(query?: {
         images: {
           orderBy: { displayOrder: "asc" },
         },
+        ...productSizesInclude,
       },
     }),
   ]);
@@ -387,7 +470,6 @@ interface CreateProductInput {
   description: string;
   price: string;
   offerPrice?: string;
-  stock?: number;
   isActive?: boolean;
 }
 
@@ -423,19 +505,14 @@ export async function createProduct(input: CreateProductInput) {
     throw new AppError(400, "price must be a valid number");
   }
 
-  if (input.offerPrice?.trim()) {
+  if (
+    input.offerPrice?.trim()
+  ) {
     try {
       toDecimal(input.offerPrice);
     } catch {
       throw new AppError(400, "offerPrice must be a valid number");
     }
-  }
-
-  if (
-    input.stock !== undefined &&
-    (!Number.isInteger(input.stock) || input.stock < 0)
-  ) {
-    throw new AppError(400, "stock must be a non-negative integer");
   }
 
   const menuSubmenu = await prisma.menuSubmenu.findUnique({
@@ -456,7 +533,6 @@ export async function createProduct(input: CreateProductInput) {
       description,
       price,
       offerPrice,
-      stock: input.stock ?? 0,
       isActive: input.isActive ?? true,
     },
   });
@@ -473,7 +549,6 @@ export async function patchProduct(
     description?: string;
     price?: string;
     offerPrice?: string | null;
-    stock?: number;
     isActive?: boolean;
   },
 ) {
@@ -490,7 +565,6 @@ export async function patchProduct(
     input.description === undefined &&
     input.price === undefined &&
     input.offerPrice === undefined &&
-    input.stock === undefined &&
     input.isActive === undefined
   ) {
     throw new AppError(400, "At least one field is required to update");
@@ -503,7 +577,6 @@ export async function patchProduct(
     description?: string;
     price?: Decimal;
     offerPrice?: Decimal | null;
-    stock?: number;
     isActive?: boolean;
   } = {};
 
@@ -574,14 +647,6 @@ export async function patchProduct(
         throw new AppError(400, "offerPrice must be a valid number");
       }
     }
-  }
-
-  if (input.stock !== undefined) {
-    if (!Number.isInteger(input.stock) || input.stock < 0) {
-      throw new AppError(400, "stock must be a non-negative integer");
-    }
-
-    data.stock = input.stock;
   }
 
   if (input.isActive !== undefined) {
